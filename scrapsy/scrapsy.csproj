@@ -3,10 +3,10 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net5.0</TargetFramework>
+        <ApplicationIcon>scrapsy_ico.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="DotNetSeleniumExtras.WaitHelpers" Version="3.11.0" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1" />
       <PackageReference Include="Selenium.Support" Version="3.141.0" />
       <PackageReference Include="Selenium.WebDriver" Version="3.141.0" />
