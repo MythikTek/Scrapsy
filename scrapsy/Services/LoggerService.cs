@@ -1,21 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using scrapsy.Enums;
+﻿using scrapsy.Enums;
 using scrapsy.Interfaces;
 using Spectre.Console;
+using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace scrapsy.Services
 {
     public class LoggerService : ILoggerService
     {
-        private List<string> _cachedLogs;
-        
+        private readonly List<string> _cachedLogs;
+
         public LoggerService()
         {
             var logsDirectory = Directory.GetCurrentDirectory() + @"\logs";
-            
-            
+
             if (!Directory.Exists(logsDirectory))
                 Directory.CreateDirectory(logsDirectory);
 
@@ -62,14 +61,12 @@ namespace scrapsy.Services
             SaveMessage(consoleMessage);
             if (!LogLevel.HasFlag(LoggerLevel.Severe)) return;
             AnsiConsole.MarkupLine("[red]" + consoleMessage + "[/]");
-            
         }
 
         public void LogException(Exception ex)
         {
-            
             LogSevere("EXCEPTION OCCURED");
-            
+
             SaveMessage(ex.GetType().FullName);
             SaveMessage("Source: " + ex.Source);
             SaveMessage("Message: " + ex.Message);
@@ -82,12 +79,12 @@ namespace scrapsy.Services
             //no need to saved if no logs were written
             if (_cachedLogs.Count == 0)
                 return;
-            
+
             //create the log file
             var logsDirectory = Directory.GetCurrentDirectory() + @"\logs";
             var currentTime = DateTime.Now.ToString("yyyy-dd-M HH-mm-ss");
             var logFile = logsDirectory + @"\" + currentTime + @".txt";
-            
+
             //write the logs to the log file
             using var writer = File.AppendText(logFile);
             foreach (var log in _cachedLogs)
@@ -106,6 +103,9 @@ namespace scrapsy.Services
         private void SaveMessage(string message)
         {
             _cachedLogs.Add(message);
+
+            if (_cachedLogs.Count >= 107)
+                _cachedLogs.RemoveAt(0);
         }
     }
 }

@@ -1,5 +1,5 @@
-﻿using System;
-using scrapsy.Services;
+﻿using scrapsy.Services;
+using System;
 
 namespace scrapsy.Stores
 {

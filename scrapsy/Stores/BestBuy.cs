@@ -1,325 +1,63 @@
-﻿using System;
+﻿using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Support.UI;
+using scrapsy.Enums;
+using scrapsy.Services;
+using scrapsy.Stores.Data;
+using Spectre.Console;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Edge;
-using OpenQA.Selenium.Support.UI;
-using scrapsy.Enums;
-using scrapsy.Services;
-using scrapsy.Stores.Data;
-using Spectre.Console;
-using ExpectedConditions = SeleniumExtras.WaitHelpers.ExpectedConditions;
 
 namespace scrapsy.Stores
 {
     public class BestBuy : BotStore
     {
-        private const string Login = "https://www.bestbuy.com/identity/global/signin";
+        #region constants
         private const string Cart = "https://www.bestbuy.com/cart";
-
-        private const string LogInPageTitle = "Sign In to Best Buy";
-        private const string HomePageTitle = "Best Buy | Official Online Store | Shop Now & Save";
-
         private const string UsernameFieldId = "//*[@id='fld-e']";
         private const string PasswordFieldId = "fld-p1";
         private const string SignInElement = "//*[@data-track='Sign In']";
         private const string CheckOutElement = "//*[@data-track='Checkout - Top']";
         private const string CvvFieldId = "credit-card-cvv";
+        private string BuyButtonElement => $"//*[@data-sku-id='{_currentSku}']";
         private const string PlaceOrderButtonCss = ".button__fast-track";
-        private BestBuyAuthentication _authentication;
+        #endregion
 
-        private BestBuyConfig _config;
-        private bool _configured;
-
-        private string _currentSku = "";
-        private string _cvv;
+        #region variables
+        private const string OneShot = "One Shot";
+        private const string TestMode = "Test Mode";
 
         private string _email;
         private string _password;
+        private string _cvv;
+        private string _currentSku = "";
 
+        private BestBuyConfig _config;
+        private HashSet<string> _options = new HashSet<string>();
 
-        private BestBuyProductData[] _productData;
         private WebDriverWait _waitFor;
+        #endregion
 
-        private HashSet<string> _options = new();
-
+        #region constructors
         public BestBuy(DirectoryService directoryService) : base(directoryService)
         {
-            //_waitFor = new WebDriverWait(WebDriver, TimeSpan.FromSeconds(_config.Timeout));
-            //_productData = _config.ProductData;
         }
+        #endregion
 
-        private string ProductUrl => $"https://www.bestbuy.com/site//{_currentSku}.p?skuId={_currentSku}";
-
-        private string BuyButtonElement => $"//*[@data-sku-id='{_currentSku}']";
-
-
-        protected override void OnConfigure()
-        {
-            _options = AnsiConsole.Prompt(
-                new MultiSelectionPrompt<string>()
-                    .Title("[yellow]Select bot options[/]")
-                    .PageSize(4)
-                    .AddChoices("Headless Mode", "Test Mode", "One Shot")).ToHashSet();
-
-            ConfigureFromFile();
-
-            var optionsChosen = string.Join(" | ", _options);
-            
-            Core.Logger.LogTrace($"Options Chosen: {optionsChosen}");
-
-            StartWebDriver();
-        }
-
-        private void StartWebDriver()
-        {
-            //create chrome options
-            var chromeOptions = new ChromeOptions();
-
-            //add headless mode if enabled
-            if (_options.Contains("Headless Mode"))
-                chromeOptions.AddArguments("--headless");
-            
-
-            //create web driver
-            WebDriver = new ChromeDriver(DirectoryService.CurrentDirectory, chromeOptions);
-
-            //set up WebDriverWait object
-            _waitFor = new WebDriverWait(WebDriver, TimeSpan.FromSeconds(_config.Timeout));
-
-            //get product data
-            _productData = _config.ProductData.ToArray();
-
-            //change state to start logging in
-            ChangeState(BotState.LogIn);
-        }
-
+        #region Start Up
         protected override void OnStartUp()
         {
-            SetUpAuthentication("NULL");
-            _config = new BestBuyConfig();
+            SetUpAuthentication();
+            //_config = new BestBuyConfig();
             ChangeState(BotState.Configure);
         }
-
-        private void ConfigureBot()
-        {
-            _config = new BestBuyConfig();
-            _config.Delay = 3000;
-            _config.Timeout = 10;
-
-            ShowBotConfiguration();
-
-            var configChoice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[yellow]What would you like to configure?[/]")
-                    .PageSize(4)
-                    .AddChoices("Adjust Delay", "Adjust Timeout", "Adjust Products", "Configure From File", "Cancel"));
-
-            switch (configChoice)
-            {
-                case "Adjust Delay":
-                    ShowAdjustDelay();
-                    break;
-                case "Adjust Timeout":
-                    ShowAdjustTimeout();
-                    break;
-                case "Adjust Products":
-                    ShowAdjustProducts();
-                    break;
-                case "Cancel":
-                    ChangeState(BotState.Configure);
-                    break;
-                case "Configure From File":
-                    ConfigureFromFile();
-                    break;
-            }
-
-            WebDriver = new ChromeDriver(DirectoryService.CurrentDirectory);
-        }
-
-        private void ConfigureFromFile()
-        {
-            Core.Logger.LogInfo("Loading configuration file");
-            
-            string json;
-            var settingsFile = DirectoryService.ConfigDirectory + @"\BestBuyConfig.json";
-
-            //check if file exists
-            if (!File.Exists(settingsFile))
-            {
-                Core.Logger.LogWarning("No configuration file eixits please save a configuration first.");
-                ChangeState(BotState.Configure);
-                return;
-            }
-            
-            json = File.ReadAllText(settingsFile);
-
-            _config = JsonSerializer.Deserialize<BestBuyConfig>(json);
-            _configured = true;
-            //ChangeState(BotState.Configure);
-        }
-
-        private void ShowAdjustDelay()
-        {
-            _config.Delay = AnsiConsole.Ask<int>("[yellow]Please set delay value in milisecondsp - default: 3000[/]");
-            Core.Logger.LogInfo($"Bot Delay now set to {_config.Delay} miliseconds.");
-            ChangeState(BotState.Configure);
-        }
-
-        private void ShowAdjustTimeout()
-        {
-            _config.Timeout = AnsiConsole.Ask<int>("[yellow]Please set timeout value in seconds - default: 10[/]");
-            Core.Logger.LogInfo($"Bot timeout now set to {_config.Timeout} seconds.");
-            ChangeState(BotState.Configure);
-        }
-
-        private void ShowAdjustProducts()
-        {
-            ShowBotConfiguration();
-
-            var actionChoice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[yellow]What would you like to do?[/]")
-                    .PageSize(4)
-                    .AddChoices("Edit Prodcut", "Add Product", "Remove Product", "Cancel"));
-
-            switch (actionChoice)
-            {
-                case "Edit Product":
-                    EditProdcut();
-                    break;
-                case "Add Product":
-                    AddProduct();
-                    break;
-                case "Remove Product":
-                    RemoveProduct();
-                    break;
-                case "Cancel":
-                    ChangeState(BotState.Configure);
-                    break;
-            }
-        }
-
-        private void EditProdcut()
-        {
-            if (_config.ProductData.Count == 0)
-            {
-                Core.Logger.LogWarning("No products available to edit, please add a product first.");
-                ShowAdjustProducts();
-                return;
-            }
-
-            //get current products
-            var products = _config.ProductData.ToDictionary(x => x.Name, x => x);
-
-            //select product to edit
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[yellow]Which Product would you like to edit?[/]")
-                    .PageSize(products.Keys.ToArray().Length >= 3 ? products.Keys.ToArray().Length : 3)
-                    .AddChoices(products.Keys.ToArray())
-                    .AddChoice("Cancel"));
-
-            if (choice == "Cancel")
-            {
-                ChangeState(BotState.Configure);
-                return;
-            }
-
-            var product = products[choice];
-            product.Name = AnsiConsole.Ask<string>("[yellow]Please update product name[/]");
-            product.Sku = AnsiConsole.Ask<string>("[yellow]Please update product sku[/]");
-            product.ModelNumber = AnsiConsole.Ask<string>("[yellow]Please update product model number[/]");
-            product.MinimumPrice = AnsiConsole.Ask<int>("[yellow]Please update product minimum price[/]");
-            product.MaximumPrice = AnsiConsole.Ask<int>("[yellow]Please update product maximum price[/]");
-
-            ChangeState(BotState.Configure);
-        }
-
-        private void AddProduct()
-        {
-            var product = new BestBuyProductData
-            {
-                Name = AnsiConsole.Ask<string>("[yellow]Please enter product name[/]"),
-                Sku = AnsiConsole.Ask<string>("[yellow]Please enter product sku[/]"),
-                ModelNumber = AnsiConsole.Ask<string>("[yellow]Please enter product model number[/]"),
-                MinimumPrice = AnsiConsole.Ask<int>("[yellow]Please enter product minimum price[/]"),
-                MaximumPrice = AnsiConsole.Ask<int>("[yellow]Please enter product maximum price[/]")
-            };
-
-            _config.ProductData.Add(product);
-            _configured = true;
-            ChangeState(BotState.Configure);
-        }
-
-        private void RemoveProduct()
-        {
-            if (_config.ProductData.Count == 0)
-            {
-                Core.Logger.LogWarning("No products available to edit, please add a product first.");
-                ShowAdjustProducts();
-                return;
-            }
-
-            //get current products
-            var products = _config.ProductData.ToDictionary(x => x.Name, x => x);
-
-            //select product to remove
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[yellow]Which Product would you like to remove?[/]")
-                    .PageSize(products.Keys.ToArray().Length >= 3 ? products.Keys.ToArray().Length : 3)
-                    .AddChoices(products.Keys.ToArray())
-                    .AddChoice("Cancel"));
-
-            if (choice == "Cancel")
-            {
-                ChangeState(BotState.Configure);
-                return;
-            }
-
-            _config.ProductData.Remove(products[choice]);
-            if (_config.ProductData.Count == 0)
-                _configured = false;
-            ChangeState(BotState.Configure);
-        }
-
-        private void ShowBotConfiguration()
-        {
-            var botConfig = new Table();
-            botConfig.Title("Bot Settings");
-            botConfig.AddColumn("Property");
-            botConfig.AddColumn("Value");
-            botConfig.AddRow("Delay", _config.Delay.ToString());
-            botConfig.AddRow("Timeout", _config.Delay.ToString());
-
-            AnsiConsole.Render(botConfig);
-            var products = new Tree("Products");
-
-            foreach (var item in _config.ProductData)
-            {
-                var product = new Table();
-                product.Title(item.Name);
-                product.AddColumn("Property");
-                product.AddColumn("Value");
-
-                product.AddRow("Sku", item.Sku);
-                product.AddRow("Model Number", item.ModelNumber);
-                product.AddRow("Maximum Price", item.MaximumPrice.ToString());
-                product.AddRow("Minimum Price", item.MinimumPrice.ToString());
-
-                products.AddNode(product);
-            }
-
-            AnsiConsole.Render(products);
-        }
-
-        private void SetUpAuthentication(string authPath)
+        
+        private void SetUpAuthentication()
         {
             _email = AnsiConsole.Ask<string>("[yellow]Please enter your Best Buy email[/]");
             _password = AnsiConsole.Prompt(
@@ -329,7 +67,139 @@ namespace scrapsy.Stores
                 "[yellow]Please enter your credit card cvv number[/]");
             Core.Logger.LogInfo("Account info stored");
         }
+        #endregion
 
+        #region Configuration
+        protected override void OnConfigure()
+        {
+            ConfigureBot();
+
+            _options = AnsiConsole.Prompt(
+                new MultiSelectionPrompt<string>()
+                    .Title("[yellow1]Select bot options[/]")
+                    .PageSize(4)
+                    .AddChoices(OneShot, TestMode)).ToHashSet();
+
+            var optionsChosen = string.Join(" | ", _options);
+
+            Core.Logger.LogTrace($"Options Chosen: {optionsChosen}");
+
+            StartWebDriver();
+        }
+        
+        private void ConfigureBot()
+        {
+            //check if configDirectory exists
+            var configDir = DirectoryService.ConfigDirectory + @"\BestBuy";
+
+            if (!Directory.Exists(configDir))
+                Directory.CreateDirectory(configDir);
+
+            //check if any configuration files exist
+            var configExists = DirectoryService.CheckIfFilesExist(configDir, "*.config");
+
+            //set up configuration actions
+            var newConfig = "Create New Configuration";
+            var loadConfig = "Load Existing Configuration";
+
+            //create configuration actions list
+            var configActions = new List<string> { newConfig };
+
+            //add load from file option if configurations already exist
+            if (configExists)
+                configActions.Add(loadConfig);
+
+            //ask user how bot should be configured
+            var configType = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                .Title("[yellow1]How would you like to configure Scrapsy?[/]")
+                .PageSize(3)
+                .AddChoices(configActions));
+
+            if (configType == newConfig)
+                RunNewConfiguration();
+            else if (configType == loadConfig)
+                ConfigureFromFile();
+        }
+        
+        private void RunNewConfiguration()
+        {
+            _config = new BestBuyConfig();
+
+            //ask user for a link to an item
+            var productLink = AnsiConsole.Ask<string>("[yellow1]Please Enter url to your desired item[/]");
+            _config.Links.Add(productLink);
+            Core.Logger.LogInfo($"{productLink} added to configuration");
+
+            //ask if user would like to add any additional links
+            while (true)
+            {
+                if (AnsiConsole.Confirm("[yellow1]Would you like to add another url?[/]"))
+                {
+                    productLink = AnsiConsole.Ask<string>("[yellow1]Please Enter url to your desired item[/]");
+                    _config.Links.Add(productLink);
+                    Core.Logger.LogInfo($"{productLink} added to configuration");
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            //request if user wants to save file
+            if (AnsiConsole.Confirm("[yellow1]Would you like to save this configuration for future use?[/]"))
+            {
+                var configName = AnsiConsole.Ask<string>("[yellow]Please enter a name for your configuration.[/]");
+
+                var filePath = DirectoryService.ConfigDirectory + @"\BestBuy\" + configName + ".config";
+                var json = JsonSerializer.Serialize<BestBuyConfig>(_config);
+
+                File.WriteAllText(filePath, json);
+            }
+        }
+        
+        private void ConfigureFromFile()
+        {
+            var configFiles = DirectoryService.GetFilesInDirectory(DirectoryService.ConfigDirectory + @"\BestBuy", "*.config")
+                .ToDictionary(x => Path.GetFileNameWithoutExtension(x.Name), x => x);
+
+            var fileToLoad = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                .Title("[yellow1]Which configuration would you like to load[/]")
+                .PageSize(configFiles.Keys.Count >= 3 ? configFiles.Keys.Count : 3)
+                .AddChoices(configFiles.Keys.ToArray()));
+
+            string json;
+            var settingsFile = configFiles[fileToLoad].FullName;
+
+            json = File.ReadAllText(settingsFile);
+
+            _config = JsonSerializer.Deserialize<BestBuyConfig>(json);
+        }
+        
+        private void StartWebDriver()
+        {
+            //create chrome options
+            var chromeOptions = new ChromeOptions();
+
+            //add headless mode if enabled
+            if (_options.Contains("Headless Mode"))
+                chromeOptions.AddArguments("--headless");
+
+            //create web driver
+            WebDriver = new ChromeDriver(DirectoryService.CurrentDirectory, chromeOptions);
+
+            //set up WebDriverWait object
+            _waitFor = new WebDriverWait(WebDriver, TimeSpan.FromSeconds(_config.Timeout));
+
+            //get product data
+
+            //change state to start logging in
+            ChangeState(BotState.LogIn);
+        }
+        #endregion
+
+        #region LifeTime
         protected override void OnLogIn()
         {
             ChangeState(BotState.CheckCart);
@@ -339,31 +209,26 @@ namespace scrapsy.Stores
         {
             /*TODO: ADD FUNCTIONALITY TO CHECK IF PRICE IS WITHIN RANGE IN CONFIG FILE*/
 
-            foreach (var productData in _productData)
+            foreach (var link in _config.Links)
             {
-                var wait = false;
-                Task.Factory.StartNew(() =>
+                var wait = Task.Factory.StartNew(() =>
                 {
                     Core.Logger.LogTrace("Check Item Delay Started...");
-                    Thread.Sleep(3000);
-                    wait = true;
+                    Thread.Sleep(_config.Delay);
                     Core.Logger.LogTrace("Check Item Delay Completed...");
                 });
 
-                //Check price for current produect
-                _currentSku = productData.Sku;
-                Core.Logger.LogInfo($"Checking Availability for product:{productData.Name} sku:{productData.Sku}");
-                WebDriver.Url = ProductUrl; //set the url
-
-                _waitFor.Until(x => wait); //wait for delay to complete
-
-                //wait for page to load
-                _waitFor.Until(x => x.Title.Contains(productData.ModelNumber));
+                Core.Logger.LogInfo($"Navigating to product url: {link}");
+                WebDriver.Navigate().GoToUrl(link); //set the url
 
                 //get buy button element
                 Core.Logger.LogTrace("Getting Buy Now Button");
+
+                //get sku from url
+                _currentSku = link.Split('=').Last();
+
                 var buyBtn = _waitFor.Until(x => x.FindElement(By.XPath(BuyButtonElement)));
-                
+
                 //check if available
 
                 if (buyBtn.Enabled)
@@ -376,6 +241,7 @@ namespace scrapsy.Stores
                 }
 
                 Core.Logger.LogWarning($"not in stock.. Checking next item");
+                wait.Wait();
             }
 
             ChangeState(BotState.CheckForItems);
@@ -466,7 +332,7 @@ namespace scrapsy.Stores
                 StartWebDriver();
                 return;
             }
-            
+
             //wait 15 seconds before restarting - allows time for order to process
             Core.Logger.LogInfo("Waiting 15 seconds for purchase to confirm, restarting once timer is complete");
             Thread.Sleep(15000);
@@ -482,5 +348,7 @@ namespace scrapsy.Stores
 
             ChangeState(BotState.CheckForItems);
         }
+
+        #endregion
     }
 }

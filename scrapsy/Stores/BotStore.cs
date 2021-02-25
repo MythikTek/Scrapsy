@@ -1,8 +1,8 @@
-﻿using System;
-using OpenQA.Selenium;
+﻿using OpenQA.Selenium;
 using scrapsy.Enums;
 using scrapsy.Interfaces;
 using scrapsy.Services;
+using System;
 
 namespace scrapsy.Stores
 {
@@ -49,6 +49,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 case BotState.StartUp:
                     try
                     {
@@ -59,6 +60,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 case BotState.LogIn:
                     try
                     {
@@ -69,6 +71,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 case BotState.CheckForItems:
                     try
                     {
@@ -79,6 +82,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 case BotState.CheckOut:
                     try
                     {
@@ -89,6 +93,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 case BotState.ShutDown:
                     try
                     {
@@ -99,6 +104,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 case BotState.CheckCart:
                     try
                     {
@@ -109,6 +115,7 @@ namespace scrapsy.Stores
                         Core.Logger.LogException(e);
                     }
                     break;
+
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -132,7 +139,7 @@ namespace scrapsy.Stores
         {
             var screenShotDriver = WebDriver as ITakesScreenshot;
             var screenShot = screenShotDriver.GetScreenshot();
-            
+
             screenShot.SaveAsFile(DirectoryService.CurrentDirectory + @"\test.png", ScreenshotImageFormat.Png);
         }
     }
